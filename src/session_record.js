@@ -237,7 +237,6 @@ class SessionRecord {
 
     getSession(key) {
         assertBuffer(key);
-        this.detectDuplicateOpenSessions();
         const session = this.sessions[key.toString('base64')];
         if (session && session.indexInfo.baseKeyType === BaseKeyType.OURS) {
             throw new Error("Tried to lookup a session using our basekey");
@@ -246,7 +245,6 @@ class SessionRecord {
     }
 
     getOpenSession() {
-        this.detectDuplicateOpenSessions();
         for (const session of Object.values(this.sessions)) {
             if (!this.isClosed(session)) {
                 return session;
@@ -269,18 +267,12 @@ class SessionRecord {
 
     closeSession(session) {
         if (this.isClosed(session)) {
-            console.warn("Session already closed", session);
             return;
         }
-        // console.info("Closing session:", session);
         session.indexInfo.closed = Date.now();
     }
 
     openSession(session) {
-        if (!this.isClosed(session)) {
-            console.warn("Session already open");
-        }
-        // console.info("Opening session:", session);
         session.indexInfo.closed = -1;
     }
 
@@ -288,34 +280,21 @@ class SessionRecord {
         return session.indexInfo.closed !== -1;
     }
 
-    updateSessionState(session) {
-        // this.removeOldChains(session);
-        this.setSession(session);
-        this.removeOldSessions();
-
-    }
-
-    archiveCurrentState() {
-        let open_session = this.getOpenSession();
-        if (open_session !== undefined) {
-            this.closeSession(open_session);
-            this.updateSessionState(open_session);
-        }
-    }
-
     removeOldSessions() {
         while (Object.keys(this.sessions).length > CLOSED_SESSIONS_MAX) {
             let oldestKey;
             let oldestSession;
             for (const [key, session] of Object.entries(this.sessions)) {
-                if (session.indexInfo.closed !== -1 &&
-                    (!oldestSession || session.indexInfo.closed < oldestSession.indexInfo.closed)) {
+                if (
+                	session.indexInfo.closed !== -1 &&
+                	(!oldestSession ||
+                		session.indexInfo.closed < oldestSession.indexInfo.closed)
+                ) {
                     oldestKey = key;
                     oldestSession = session;
                 }
             }
             if (oldestKey) {
-                // console.info("Removing old closed session:", oldestSession);
                 delete this.sessions[oldestKey];
             } else {
                 throw new Error('Corrupt sessions object');
@@ -324,19 +303,8 @@ class SessionRecord {
     }
 
     deleteAllSessions() {
-        this.sessions = {};
-    }
-
-    detectDuplicateOpenSessions() {
-        let openSession;
-        let sessions = this.sessions;
-        for (const key in sessions) {
-            if (!this.isClosed(sessions[key])) {
-                if (openSession !== undefined) {
-                    throw new Error("Datastore inconsistensy: multiple open sessions");
-                }
-                openSession = sessions[key];
-            }
+        for (const key of Object.keys(this.sessions)) {
+            delete this.sessions[key];
         }
     }
 }
